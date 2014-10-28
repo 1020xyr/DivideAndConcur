@@ -15,7 +15,7 @@ Elser, V., Rankenburg, I., and Thibault, P.: Searching with iterated maps,
 
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier as KNN
-
+from sys import stdout
 
 def knn(data, K):
     """
@@ -199,6 +199,8 @@ def d_and_c(data, K, D=2, beta=0.999, maxiter=100):
     x = split_embeddings(embeddings, n_idx)
 
     for i in xrange(maxiter):
+        stdout.write("\rIteration %d/%d                " % (i, maxiter))
+        stdout.flush()
         #main loop
         x_c = concur_and_split(
             (1 + 1 / beta) * divide(x, distances) - 1 / beta * x,
