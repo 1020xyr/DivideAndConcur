@@ -31,17 +31,17 @@ def test_initialization():
     distances, n_idx = neighbors.kneighbors(data)
     embeddings = dc.initialize_embeddings(data, n_idx)
     # Divide embeddings per neighborhood.
-    divided_embeddings = split_embeddings(embeddings, n_idx)
+    divided_embeddings = dc.split_embeddings(embeddings, n_idx)
 
     for i, n_id in enumerate(n_idx):
         assert np.all(divided_embeddings[:, i, :] == embeddings[n_id])
 
 def test_divide():
-    data,  = test_knn()
+    data, neighbors = test_knn()
     distances, n_idx = neighbors.kneighbors(data)
     embeddings = dc.initialize_embeddings(data, n_idx)
     # Divide embeddings per neighborhood.
-    divided_embeddings = split_embeddings(embeddings, n_idx)
+    divided_embeddings = dc.split_embeddings(embeddings, n_idx)
 
     # Sadly there is muting and copying in divide.
     divide_before = divided_embeddings.copy()
@@ -63,6 +63,15 @@ def test_concur():
     distances, n_idx = neighbors.kneighbors(data)
     embeddings = dc.initialize_embeddings(data, n_idx)
     # Divide embeddings per neighborhood.
-    divided_embeddings = split_embeddings(embeddings, n_idx)
+    divided_embeddings = dc.split_embeddings(embeddings, n_idx)
 
     dc.concur(divided_embeddings, n_idx)
+
+def test_main_loop(dim=7, samples=70):
+    data = np.zeros((samples, dim))
+    # Normal distribution, each centered around s/10,
+    # where s is the sample number
+    for s in xrange(samples):
+        data[s] = np.random.normal(loc=(s//10), scale=0.1, size=dim)
+
+    dc.d_and_c(data, K=7, D=2, maxiter=10)

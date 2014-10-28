@@ -1,10 +1,34 @@
-#!/usr/bin/env python
+# Module to embed data using divide and concur
+
+"""
+For more info:
+Dissertation: Gravel, Simon: Using symmmetries to solve asymmetric problems,
+    Cornell University, August 2008
+Gravel, S., and Elser, V.: Divide and concur:
+    A general approach to constraint satisfaction, Physical Review E 78(3),
+    APS, 36706, 2008
+Elser, V., Rankenburg, I., and Thibault, P.: Searching with iterated maps,
+    Proceedings of the National Academy of Sciences 104(2),
+    National Acad Sciences, 418, 2007
+"""
+
 
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier as KNN
 
 
 def knn(data, K):
+    """
+    k-nearest neighbors wrapper.
+
+    Parameters
+    ----------
+    data: array-like
+        Input data.
+    K: int
+        k from knn.
+    """
+
     neighbors = KNN(n_neighbors=K)
     neighbors.fit(data, data)
     return neighbors
@@ -12,6 +36,15 @@ def knn(data, K):
 def initialize_embeddings(data, n_idx, D=2):
     """
     Function to initialize embeddings and broadcast them into a divided one.
+
+    Parameters
+    ----------
+    data: array-like
+        Input data.
+    n_idx: list of list of ints
+        Mapping between cluster and indices.
+    D: int
+        Embedded dimension.
     """
     N = data.shape[0]
     K = n_idx.shape[1]
@@ -25,6 +58,20 @@ def initialize_embeddings(data, n_idx, D=2):
 def split_embeddings(embeddings, n_idx, divided_embeddings=None):
     """
     Split embeddings across neighborhoods.
+
+    Parameters
+    ----------
+    embeddings: array-like
+        Embeddings of data in D-d data.
+    n_idx: list of list of ints
+        Mapping between cluster and indices.
+    divided_embeddings: array-like
+        Replicated representation of embedded data.
+
+    Returns
+    -------
+    divided_embeddings: array-like
+        Embeddings replicated.
     """
 
     N, D = embeddings.shape
@@ -47,20 +94,33 @@ def divide(divided_embeddings, scale_factors):
     sample to the centroid of the neighborhood, and move the points toward the
     centroid by a factor of tanh(||d||/sd - 1), where d is the distance to the
     centroid, and sd is the original distance.
+
+    Parameters
+    ----------
+    divided_embeddings: array-like
+        Replicated representation of embedded data.
+    scale_factors: array-like
+        Scale factor for each scaling, set initially by knn distances.
+
+    Returns
+    -------
+    rval: array-like
+        Replicated representation after pivoting.
     """
 
-    K, N, D = divided_embeddings.shape
+    rval = divided_embeddings.copy()
+    K, N, D = rval.shape
     assert scale_factors.shape == (N, K)
 
-    centroids = divided_embeddings.mean(axis=0)
+    centroids = rval.mean(axis=0)
 
     # Set the center point to the mean and shift the data such that the centroid
     # is at the origin.
-    divided_embeddings[0] = centroids
-    divided_embeddings -= centroids
+    rval[0] = centroids
+    rval -= centroids
 
     # Compute the distances to the centers.
-    distances = np.linalg.norm(divided_embeddings,
+    distances = np.linalg.norm(rval,
                                axis=2)
 
     # Compute the scales as tanh(d/s - 1). Divide by 0 for source is fixed.
@@ -68,11 +128,24 @@ def divide(divided_embeddings, scale_factors):
     scales[0,:] = 0
 
     # Scale and shift back.  Broadcasting in numpy is trailing indices.
-    divided_embeddings = (scales.T * divided_embeddings.T).T
-    divided_embeddings += centroids
-    return divided_embeddings
+    rval = (scales.T * rval.T).T
+    rval += centroids
+    return rval
 
 def concur(divided_embeddings, n_idx, embeddings=None):
+    """
+    Concur step.
+    Sets all replications to the centroid.
+
+    Parameters
+    ----------
+    divided_embeddings: array-like
+        Replicated representation of embedded data.
+    n_idx: list of list of ints
+        Mapping between cluster and indices.
+    embeddings: array-like
+        Embeddings of data in D-d data.
+    """
     N = divided_embeddings.shape[1]
 
     if embeddings is None:
@@ -84,14 +157,57 @@ def concur(divided_embeddings, n_idx, embeddings=None):
         embeddings[i] = divided_embeddings[idx].mean(axis=0)
     return embeddings
 
-def d_and_c(data, neighbors, D=2, beta=0.999, maxiter=100):
-    distances, n_idx = neighbors.kneighbors(data)
-    embeddings = dc.initialize_embeddings(data, n_idx)
+def concur_and_split(divided_embeddings, n_idx, embeddings=None):
+    """
+    Concur then split.
+    """
+    embeddings = concur(divided_embeddings, n_idx, embeddings=None)
+    return split_embeddings(embeddings, n_idx)
 
-    divided_embeddings = None
+def d_and_c(data, K, D=2, beta=0.999, maxiter=100):
+    """
+    Divide and concur algorithm.
+    Iterated though
+    x_c = concur((1 + 1 / beta) * divide(x) - 1 / beta * x)
+    and
+    x_d = divide((1 - 1 / beta) * concur(x) + 1 / beta * x)
+    finally:
+    x <- beta(x_c - x_d)
+    where x is the divided embedding.
+
+    .. todo:: Add terminating criteria and monitoring.
+
+    Parameters
+    ----------
+    data: array-like
+        Input data.
+    K: int
+        k in knn.
+    beta: float
+        Learning rate.
+    maxiter: int
+        Maximum iterations of loop.
+
+    Returns
+    -------
+    2d embeddings.
+    """
+
+    neighbors = knn(data, K)
+    distances, n_idx = neighbors.kneighbors(data)
+    embeddings = initialize_embeddings(data, n_idx, D=D)
+    x = split_embeddings(embeddings, n_idx)
+
     for i in xrange(maxiter):
         #main loop
-        pass
+        x_c = concur_and_split(
+            (1 + 1 / beta) * divide(x, distances) - 1 / beta * x,
+            n_idx)
+        x_d = divide((1 - 1 / beta) * concur_and_split(x, n_idx) + 1 / beta * x,
+                     distances)
+        x = x + beta * (x_c - x_d)
 
-def main(data, K):
-    neighbors = knn(data, K)
+    return concur(x, n_idx)
+
+def main(data, K, D=2):
+    d_and_c(data, K, D=D)
