@@ -3,7 +3,7 @@
 import divide_and_concur as dc
 import numpy as np
 
-def test_knn(dim=7, samples=70):
+def test_knn(dim=7, samples=70, scale=0.1):
     """
     Function to test basic KNN functionality.
     """
@@ -12,7 +12,7 @@ def test_knn(dim=7, samples=70):
     # Normal distribution, each centered around s/10,
     # where s is the sample number
     for s in xrange(samples):
-        data[s] = np.random.normal(loc=(s//10), scale=0.1, size=dim)
+        data[s] = np.random.normal(loc=(s//10), scale=scale, size=dim)
     neighbors = dc.knn(data, K=samples//10)
 
     # With a tight normal distribution as above, neighbors should be in
@@ -67,11 +67,12 @@ def test_concur():
 
     dc.concur(divided_embeddings, n_idx)
 
-def test_main_loop(dim=7, samples=70):
+def test_main_loop(dim=7, samples=70, maxiter=10):
     data = np.zeros((samples, dim))
     # Normal distribution, each centered around s/10,
     # where s is the sample number
     for s in xrange(samples):
-        data[s] = np.random.normal(loc=(s//10), scale=0.1, size=dim)
+        data[s] = np.random.normal(loc=(s//10), scale=1, size=dim)
 
-    dc.d_and_c(data, K=7, D=2, maxiter=10)
+    embedding = dc.d_and_c(data, K=7, D=2, maxiter=maxiter)
+    return embedding
